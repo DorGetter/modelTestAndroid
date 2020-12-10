@@ -1,6 +1,8 @@
 package com.example.androidseries;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+import android.content.res.AssetFileDescriptor;
 import android.os.Bundle;
 import android.view.SurfaceView;
 import android.widget.Toast;
@@ -14,6 +16,12 @@ import org.opencv.core.Mat;
 import org.opencv.features2d.*;
 import org.opencv.dnn.Net;
 import org.opencv.imgproc.Imgproc;
+import org.tensorflow.lite.Interpreter;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
@@ -21,6 +29,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     CameraBridgeViewBase    cameraBridgeViewBase ;
     BaseLoaderCallback      baseLoaderCallback;  // allows as to get the frames from the camera
     int counter = 0;
+    Interpreter interpreter;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -44,6 +53,13 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 }
             }
         };
+
+
+        try {
+            interpreter = new Interpreter(loadModelFile(), null);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     // this is the important one...
@@ -54,17 +70,53 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
         Mat frame = inputFrame.rgba();
+        float output = 0;
+//        interpreter.run(frame, output);
+
+        System.out.println("prediction: "+ output);
+
 
 //        if(counter % 20 == 0){
 //            Core.flip(frame, frame, 1);
 //            Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2GRAY);
 //        }
-        Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2GRAY);
-        Imgproc.Canny(frame, frame, 100 ,80);
-        counter = counter+1;
+//        Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2GRAY);
+//        Imgproc.Canny(frame, frame, 100 ,80);
+//        counter = counter+1;
+
+
+
+
+
+
+
+
 
         return frame;
     }
+
+
+
+    private MappedByteBuffer loadModelFile() throws IOException{
+        AssetFileDescriptor assetFileDescriptor = this.getAssets().openFd("model.tflite");
+        FileInputStream fileInputStream = new FileInputStream(assetFileDescriptor.getFileDescriptor());
+        FileChannel fileChannel = fileInputStream.getChannel();
+        long startoffset = assetFileDescriptor.getStartOffset();
+        long length = assetFileDescriptor.getLength();
+
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startoffset, length);
+    }
+
+
+
+
+
+
+
+
+
+
+
 
     @Override
     public void onCameraViewStarted(int width, int height) {
