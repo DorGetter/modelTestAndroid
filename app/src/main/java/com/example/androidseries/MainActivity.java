@@ -7,21 +7,30 @@ import android.os.Bundle;
 import android.view.SurfaceView;
 import android.widget.Toast;
 
+import org.jetbrains.annotations.NotNull;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.JavaCameraView;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfFloat;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.dnn.Dnn;
 import org.opencv.features2d.*;
 import org.opencv.dnn.Net;
 import org.opencv.imgproc.Imgproc;
 import org.tensorflow.lite.Interpreter;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.FloatBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+
+import static org.opencv.core.CvType.CV_32F;
 
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
@@ -29,6 +38,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     CameraBridgeViewBase    cameraBridgeViewBase ;
     BaseLoaderCallback      baseLoaderCallback;  // allows as to get the frames from the camera
     int counter = 0;
+
+
+
+
     Interpreter interpreter;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,6 +73,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         } catch (IOException e) {
             e.printStackTrace();
         }
+//            interpreter = new Interpreter(new File("model.tflite"));
+
     }
 
     // this is the important one...
@@ -69,28 +84,17 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
+
         Mat frame = inputFrame.rgba();
-        float output = 0;
-//        interpreter.run(frame, output);
+        Imgproc.cvtColor(frame,frame, Imgproc.COLOR_RGBA2RGB);
+        Imgproc.cvtColor(frame,frame, Imgproc.COLOR_RGB2YUV);
 
-        System.out.println("prediction: "+ output);
-
-
-//        if(counter % 20 == 0){
-//            Core.flip(frame, frame, 1);
-//            Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2GRAY);
-//        }
-//        Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2GRAY);
-//        Imgproc.Canny(frame, frame, 100 ,80);
-//        counter = counter+1;
+        Mat imageBlob = Dnn.blobFromImage(frame, 0.00392, new Size(66,200), new Scalar(0, 0, 0), false, false);
 
 
-
-
-
-
-
-
+        float result =0 ;
+        interpreter.run(imageBlob, result);
+        System.out.println("result prediction "+ result);
 
         return frame;
     }
