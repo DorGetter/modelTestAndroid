@@ -1,5 +1,7 @@
 plugins {
     id 'com.android.application'
+    id 'com.chaquo.python'
+
 }
 
 android {
@@ -14,6 +16,26 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+
+        ndk {
+            abiFilters "armeabi-v7a", "x86"
+        }
+        python{
+            buildPython "C:/Users/dor/AppData/Local/Programs/Python/Python38/python.exe"
+        }
+
+        python{
+            pip{
+//                install "numpy"
+                install "opencv-contrib-python-headless"
+                install "pillow"
+                install "face_recognition"
+                install "matplotlib"
+                install "tensorflow"
+                install "h5py"
+            }
+        }
     }
 
     buildTypes {

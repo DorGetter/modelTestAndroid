@@ -1,17 +1,30 @@
 package com.example.androidseries;
 
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.res.AssetFileDescriptor;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Base64;
 import android.view.SurfaceView;
+import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Toast;
+
+import com.chaquo.python.PyObject;
+import com.chaquo.python.Python;
+import com.chaquo.python.android.AndroidPlatform;
 
 import org.jetbrains.annotations.NotNull;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.JavaCameraView;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfFloat;
@@ -23,26 +36,42 @@ import org.opencv.dnn.Net;
 import org.opencv.imgproc.Imgproc;
 import org.tensorflow.lite.Interpreter;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Map;
 
 import static org.opencv.core.CvType.CV_32F;
+
 
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
     CameraBridgeViewBase    cameraBridgeViewBase ;
     BaseLoaderCallback      baseLoaderCallback;  // allows as to get the frames from the camera
-    int counter = 0;
 
 
+    Button btn;
+    ImageView iv;
+    BitmapDrawable drawable;
+    Bitmap bitmap;
+    String imageString = "";
+    Interpreter interperter;
 
 
-    Interpreter interpreter;
+    /**
+     * PyObject pyo = py.getModule("model_input");
+     *             PyObject obj = pyo.callAttr("main", imageString);
+     *
+     *             float[][] outputs = new float[1][1];
+     *             interperter.run(s, outputs);
+     *             System.out.println(obj.toString());
+     * @param savedInstanceState
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,12 +98,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
 
         try {
-            interpreter = new Interpreter(loadModelFile(), null);
+            interperter = new Interpreter(loadModelFile(), null);
         } catch (IOException e) {
             e.printStackTrace();
         }
-//            interpreter = new Interpreter(new File("model.tflite"));
-
     }
 
     // this is the important one...
@@ -84,17 +111,18 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
-
         Mat frame = inputFrame.rgba();
-        Imgproc.cvtColor(frame,frame, Imgproc.COLOR_RGBA2RGB);
-        Imgproc.cvtColor(frame,frame, Imgproc.COLOR_RGB2YUV);
+        Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2RGB);
+        Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGB2YUV);
+        Imgproc.GaussianBlur(frame, frame, new Size(3, 3), 0, 0);
+//        Imgproc.resize(frame, frame, new Size(200, 66));
+        Mat blob = Dnn.blobFromImage(frame, 0.00392, new Size(200, 66) , new Scalar(0,0 ,0), false,false);
+        float[][] outputs = new float[1][1];
+        int buff[] = new int[(int)blob.total() * blob.channels()];
+        blob.get(0, 0, buff);
 
-        Mat imageBlob = Dnn.blobFromImage(frame, 0.00392, new Size(66,200), new Scalar(0, 0, 0), false, false);
 
-
-        float result =0 ;
-        interpreter.run(imageBlob, result);
-        System.out.println("result prediction "+ result);
+        interperter.run(buff ,outputs);
 
         return frame;
     }
@@ -110,17 +138,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startoffset, length);
     }
-
-
-
-
-
-
-
-
-
-
-
 
     @Override
     public void onCameraViewStarted(int width, int height) {
