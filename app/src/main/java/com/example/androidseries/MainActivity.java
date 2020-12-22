@@ -15,9 +15,9 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
-import com.chaquo.python.PyObject;
-import com.chaquo.python.Python;
-import com.chaquo.python.android.AndroidPlatform;
+//import com.chaquo.python.PyObject;
+//import com.chaquo.python.Python;
+//import com.chaquo.python.android.AndroidPlatform;
 
 import org.jetbrains.annotations.NotNull;
 import org.opencv.android.BaseLoaderCallback;
@@ -26,6 +26,7 @@ import org.opencv.android.JavaCameraView;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.Scalar;
@@ -112,17 +113,51 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
         Mat frame = inputFrame.rgba();
+
         Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2RGB);
         Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGB2YUV);
         Imgproc.GaussianBlur(frame, frame, new Size(3, 3), 0, 0);
-//        Imgproc.resize(frame, frame, new Size(200, 66));
-        Mat blob = Dnn.blobFromImage(frame, 0.00392, new Size(200, 66) , new Scalar(0,0 ,0), false,false);
+
+        Mat f = new Mat();
+        Imgproc.resize(frame,f,new Size(200, 66));
+     //   f = Dnn.blobFromImage(f, 0.00392, new Size(200, 66) , new Scalar(0,0 ,0), false,false);
+        f.convertTo(f,CV_32F);
+        StringBuilder sb = new StringBuilder();
+        String s = new String();
+        System.out.println("hei "+ f.height()+", wit" + f.width() + "ch " + f.channels());
+        System.out.println("col "+ f.cols()+", row" + f.rows() + "ch " + f.channels());
+
+        float[][][][] inputs = new float[1][200][66][3];
+        float fs[] = new float[3];
+        for( int r=0 ; r<f.rows() ; r++ ) {
+            //sb.append(""+r+") ");
+            for( int c=0 ; c<f.cols() ; c++ ) {
+                f.get(r, c, fs);
+                //sb.append( "{");
+                inputs[0][c][r][0]=fs[0]/255;
+                inputs[0][c][r][1]=fs[1]/255;
+                inputs[0][c][r][2]=fs[2]/255;
+                //sb.append( String.valueOf(fs[0]));
+                //sb.append( ' ' );
+                //sb.append( String.valueOf(fs[1]));
+                //sb.append( ' ' );
+                //sb.append( String.valueOf(fs[2]));
+                //sb.append( "}");
+                //sb.append( ' ' );
+            }
+            //sb.append( '\n' );
+        }
+        //System.out.println(sb);
+
+
+
+
         float[][] outputs = new float[1][1];
-        int buff[] = new int[(int)blob.total() * blob.channels()];
-        blob.get(0, 0, buff);
-
-
-        interperter.run(buff ,outputs);
+        //float[][][][] inputs = new float[1][200][66][3]; //desired form to model
+//
+////
+        interperter.run(inputs ,outputs);
+        System.out.println("output: " + outputs[0][0]);
 
         return frame;
     }
