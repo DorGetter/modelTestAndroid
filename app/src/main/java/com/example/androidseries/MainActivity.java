@@ -55,7 +55,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     CameraBridgeViewBase    cameraBridgeViewBase ;
     BaseLoaderCallback      baseLoaderCallback;  // allows as to get the frames from the camera
 
-
     Button btn;
     ImageView iv;
     BitmapDrawable drawable;
