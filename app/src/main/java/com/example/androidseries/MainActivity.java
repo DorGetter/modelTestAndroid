@@ -15,7 +15,12 @@ import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.JavaCameraView;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.tensorflow.lite.Interpreter;
@@ -24,8 +29,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.opencv.core.CvType.CV_32F;
+import static org.opencv.core.CvType.CV_8UC4;
 
 //import com.chaquo.python.PyObject;
 //import com.chaquo.python.Python;
@@ -95,14 +103,50 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
         Mat frame = inputFrame.rgba();
+        //float steering = get_steering_prediction(frame);
+        Mat gray = frame;
+        Imgproc.cvtColor(gray, gray, Imgproc.COLOR_RGBA2GRAY);
+        Imgproc.GaussianBlur(gray,gray,new Size(5,5),0,0);
+        Imgproc.Canny(gray,gray,60,140);
 
+        int height = gray.rows();
+        int width = gray.cols();
+        System.out.println("hei "+ height + "wid " + width);
+        Mat mask = new Mat(height,width, CvType.CV_8UC1,Scalar.all(0));
+        Point[] rook_points = new Point[3];
+        rook_points[0]  = new Point(50,height);
+        rook_points[1]  = new Point(300, 150);
+        rook_points[2]  = new Point(550,height);
+        MatOfPoint matPt = new MatOfPoint();
+        matPt.fromArray(rook_points);
+
+        List<MatOfPoint> ppt = new ArrayList<MatOfPoint>();
+        ppt.add(matPt);
+        Imgproc.fillPoly(mask,
+                ppt,
+                new Scalar( 255,255,255 )
+        );
+
+        Mat after_bit = new Mat();
+        Core.bitwise_and(gray,mask,after_bit);
+
+        return after_bit;
+
+    }
+
+    /**
+     * getting car steering prediction using keras model.
+     * @param frame camera frame
+     * @return -1 to 1 float
+     */
+    private float get_steering_prediction(Mat frame){
         Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGBA2RGB);
         Imgproc.cvtColor(frame, frame, Imgproc.COLOR_RGB2YUV);
         Imgproc.GaussianBlur(frame, frame, new Size(3, 3), 0, 0);
 
         Mat f = new Mat();
         Imgproc.resize(frame,f,new Size(200, 66));
-     //   f = Dnn.blobFromImage(f, 0.00392, new Size(200, 66) , new Scalar(0,0 ,0), false,false);
+        //   f = Dnn.blobFromImage(f, 0.00392, new Size(200, 66) , new Scalar(0,0 ,0), false,false);
         f.convertTo(f,CV_32F);
         StringBuilder sb = new StringBuilder();
         String s = new String();
@@ -135,16 +179,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
 
         float[][] outputs = new float[1][1];
-        //float[][][][] inputs = new float[1][200][66][3]; //desired form to model
-//
-////
         interperter.run(inputs ,outputs);
         System.out.println("output: " + outputs[0][0]);
-
-        return frame;
+        return outputs[0][0];
     }
-
-
 
     private MappedByteBuffer loadModelFile() throws IOException{
         AssetFileDescriptor assetFileDescriptor = this.getAssets().openFd("model.tflite");
