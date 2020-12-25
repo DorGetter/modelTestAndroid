@@ -4,6 +4,7 @@ import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
+import android.util.Pair;
 import android.view.SurfaceView;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -33,7 +34,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.opencv.core.CvType.CV_32F;
-import static org.opencv.core.CvType.CV_8UC4;
 
 //import com.chaquo.python.PyObject;
 //import com.chaquo.python.Python;
@@ -104,7 +104,14 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         Mat frame = inputFrame.rgba();
         //float steering = get_steering_prediction(frame);
-        Mat gray = frame;
+        Mat after_Lines  = draw_LaneLines(frame.clone());
+        return after_Lines;
+
+    }
+
+
+    private Mat draw_LaneLines(Mat frame){
+        Mat gray = frame.clone();
         Imgproc.cvtColor(gray, gray, Imgproc.COLOR_RGBA2GRAY);
         Imgproc.GaussianBlur(gray,gray,new Size(5,5),0,0);
         Imgproc.Canny(gray,gray,60,140);
@@ -115,8 +122,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Mat mask = new Mat(height,width, CvType.CV_8UC1,Scalar.all(0));
         Point[] rook_points = new Point[3];
         rook_points[0]  = new Point(50,height);
-        rook_points[1]  = new Point(300, 150);
-        rook_points[2]  = new Point(550,height);
+        rook_points[1]  = new Point(width/2, 150);
+        rook_points[2]  = new Point(width-50,height);
         MatOfPoint matPt = new MatOfPoint();
         matPt.fromArray(rook_points);
 
@@ -129,9 +136,77 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         Mat after_bit = new Mat();
         Core.bitwise_and(gray,mask,after_bit);
+//        lines = cv2.HoughLinesP(cropped_canny, 2, np.pi/180, 100, np.array([]), minLineLength=40,maxLineGap=5)
+        Mat result = after_bit.clone();
+        Mat lines = new Mat();
+        Imgproc.HoughLinesP(after_bit, lines, 2, Math.PI/180, 100, 50, 4);
 
-        return after_bit;
+        Mat frame_clone = frame.clone();
 
+        ArrayList<Pair<Double, Double>> left_fit = new ArrayList<>();
+        ArrayList<Pair<Double, Double>> right_fit = new ArrayList<>();
+
+        double left_slope_avr = 0;
+        double right_slope_avr = 0;
+        double left_iterccept_avr = 0;
+        double right_iterccept_avr = 0;
+        ///going through lines:
+        for(int j = 0; j < lines.rows(); j++) {
+            for (int i = 0; i < lines.cols(); i++) {
+                double[] val = lines.get(j, i);
+                double x1 = val[0];                double y1 = val[1];
+                double x2 = val[2];                double y2 = val[3];
+                double slope = Double.MAX_VALUE;
+                double intercept = 0;
+                boolean flag_slope_inter =false;
+
+                if(x1-x2!=0 ) {
+                    slope = (y1 - y2) / (x1 - x2);
+                    intercept = (y1 - (slope*x1)) ;
+                    flag_slope_inter = true;
+                }
+
+                if ( slope < 0  && flag_slope_inter) {
+                    left_fit.add(new Pair(slope, intercept));
+                    left_slope_avr += slope;
+                    left_iterccept_avr += intercept;
+                }
+                else if ( slope > 0 && flag_slope_inter) {
+                    right_fit.add(new Pair(slope, intercept));
+                    right_slope_avr += slope;
+                    right_iterccept_avr += intercept;
+                }
+                // y = slope * x + b
+//                System.out.println("[x1: " + val[0] + " y1: " + val[1] + "x2: " + val[2] + "y2: " + val[3] + " ]");
+//                Imgproc.line(result, new Point(val[0], val[1]), new Point(val[2], val[3]), new Scalar(0, 0, 255), 2);
+            }
+
+        }
+
+        left_slope_avr = left_slope_avr/left_fit.size();
+        left_iterccept_avr = left_iterccept_avr/left_fit.size();
+        right_slope_avr = right_slope_avr/right_fit.size();
+        right_iterccept_avr = right_iterccept_avr/right_fit.size();
+
+        int [] points_Left_line = make_points(left_slope_avr, left_iterccept_avr, height);
+        int [] points_Right_line = make_points(right_slope_avr, right_iterccept_avr, height);
+
+        Imgproc.line(frame_clone, new Point(points_Left_line[0], points_Left_line[1]), new Point(points_Left_line[2], points_Left_line[3]), new Scalar(255, 0, 0), 10);
+        Imgproc.line(frame_clone, new Point(points_Right_line[0], points_Right_line[1]), new Point(points_Right_line[2], points_Right_line[3]), new Scalar(255, 0, 0), 10);
+        return frame_clone;
+    }
+
+    private int[] make_points(double slope, double intercept, int height) {
+        int [] ret = new int[4];
+        int y1 = height;
+        int y2 = y1*3/5;
+        int x1 = (int)((y1-intercept)/slope);
+        int x2 = (int)((y2-intercept)/slope);
+        ret[0] = x1 ;
+        ret[1] = y1 ;
+        ret[2] = x2 ;
+        ret[3] = y2 ;
+        return ret;
     }
 
     /**
