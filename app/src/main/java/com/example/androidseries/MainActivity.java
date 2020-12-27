@@ -10,6 +10,7 @@ import android.util.Pair;
 import android.view.SurfaceView;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -65,6 +66,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     File cascadeFileCarDet;
     File cascadeFilePedestrain;
     int counterFrme= 0 ;
+    float steering_angle_ ;
+
+    TextView steering;
 
 
     @Override
@@ -72,6 +76,13 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+//        steering = (TextView) findViewById(R.id.steering_angle);
+
+//        if(steering_angle_< 0 )
+//            steering.setText("turn left" + steering_angle_ * -1 + "% of the wheel");
+//
+//        if(steering_angle_ > 0 )
+//            steering.setText("turn right" + steering_angle_  + "% of the wheel");
         cameraBridgeViewBase = (JavaCameraView) findViewById(R.id.CameraView);
         cameraBridgeViewBase.setVisibility(SurfaceView.VISIBLE);
         cameraBridgeViewBase.setCvCameraViewListener(this);
@@ -170,10 +181,11 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     // Mat is the metrics of the frame. 20/30 fps
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+//        steering = (TextView) findViewById(R.id.steering_angle);
 
 
         Mat frame = inputFrame.rgba();
-        //float steering = get_steering_prediction(frame);
+        steering_angle_ = get_steering_prediction(frame.clone());
         Mat displayMat = null;
 //        if(counterFrme % 10  == 0 || counterFrme %10 ==1 || counterFrme %10 ==2 || counterFrme %10 ==3 || counterFrme %10 ==4   ) {
             displayMat  = draw_LaneLines(frame.clone());
@@ -185,6 +197,28 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 //        }
 
         counterFrme ++;
+        if(steering_angle_< 0 ) {
+            Imgproc.putText(
+                    displayMat,                          // Matrix obj of the image
+                    "turn left " + steering_angle_ * -1 + "% of the wheel",          // Text to be added
+                    new Point(10, 50),               // point
+                    Core.FONT_HERSHEY_SIMPLEX,      // front face
+                    1,                               // front scale
+                    new Scalar(255, 0, 0),             // Scalar object for color
+                    6                                // Thickness
+            );
+        }
+        if(steering_angle_ > 0 ) {
+            Imgproc.putText(
+                    displayMat,                          // Matrix obj of the image
+                    "turn right " + steering_angle_  + "% of the wheel",          // Text to be added
+                    new Point(10, 50),               // point
+                    Core.FONT_HERSHEY_SIMPLEX,      // front face
+                    1,                               // front scale
+                    new Scalar(255, 0, 0),             // Scalar object for color
+                    6                                // Thickness
+            );
+        }
 
         return displayMat;
 
