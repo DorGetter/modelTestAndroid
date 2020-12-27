@@ -1,13 +1,16 @@
 package com.example.androidseries;
 
+import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Pair;
 import android.view.SurfaceView;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -20,14 +23,20 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
 
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
@@ -52,22 +61,28 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     Bitmap bitmap;
     String imageString = "";
     Interpreter interperter;
+    CascadeClassifier detector;
+    CascadeClassifier detectorPed;
+    File cascadeFileCarDet;
+    File cascadeFilePedestrain;
+    int counterFrme= 0 ;
+    float steering_angle_ ;
+
+    TextView steering;
 
 
-    /**
-     * PyObject pyo = py.getModule("model_input");
-     *             PyObject obj = pyo.callAttr("main", imageString);
-     *
-     *             float[][] outputs = new float[1][1];
-     *             interperter.run(s, outputs);
-     *             System.out.println(obj.toString());
-     * @param savedInstanceState
-     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+//        steering = (TextView) findViewById(R.id.steering_angle);
+
+//        if(steering_angle_< 0 )
+//            steering.setText("turn left" + steering_angle_ * -1 + "% of the wheel");
+//
+//        if(steering_angle_ > 0 )
+//            steering.setText("turn right" + steering_angle_  + "% of the wheel");
         cameraBridgeViewBase = (JavaCameraView) findViewById(R.id.CameraView);
         cameraBridgeViewBase.setVisibility(SurfaceView.VISIBLE);
         cameraBridgeViewBase.setCvCameraViewListener(this);
@@ -79,6 +94,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 switch (status){
                     case BaseLoaderCallback.SUCCESS:
                         cameraBridgeViewBase.enableView();
+                        initFileCascadeCarsDet();
+                        initFileCascadePedestrains();
                         break;
                     default:
                         super.onManagerConnected(status);
@@ -95,17 +112,145 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
     }
 
+    private void initFileCascadePedestrains() {
+        try {
+            System.out.println("init file Cascade");
+
+            InputStream is = getResources().openRawResource(R.raw.pedestrian);
+            File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
+            cascadeFilePedestrain = new File(cascadeDir, "pedestrian.xml");
+
+            FileOutputStream os = new FileOutputStream(cascadeFilePedestrain);
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+                os.write(buffer, 0, bytesRead);
+            }
+            is.close();
+            os.close();
+            detectorPed = new CascadeClassifier(cascadeFilePedestrain.getAbsolutePath());
+
+            if(detectorPed.empty()){
+                detectorPed = null;
+            }
+            else{
+                cascadeDir.delete();
+            }
+        } catch (Exception e) {
+            System.out.println("something wrong!");
+            e.printStackTrace();
+        }
+    }
+
+
+
+
+    private void initFileCascadeCarsDet() {
+        try {
+            System.out.println("init file Cascade");
+
+            InputStream is = getResources().openRawResource(R.raw.cars_detect);
+            File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
+            cascadeFileCarDet = new File(cascadeDir, "cars_detect.xml");
+
+            FileOutputStream os = new FileOutputStream(cascadeFileCarDet);
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+                os.write(buffer, 0, bytesRead);
+            }
+            is.close();
+            os.close();
+            detector = new CascadeClassifier(cascadeFileCarDet.getAbsolutePath());
+
+            if(detector.empty()){
+                detector = null;
+            }
+            else{
+                cascadeDir.delete();
+            }
+        } catch (Exception e) {
+            System.out.println("something wrong!");
+            e.printStackTrace();
+        }
+    }
+
     // this is the important one...
     // getting frames from camera before showing it.
     // here need to implement the logic's. processing media
     // Mat is the metrics of the frame. 20/30 fps
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+//        steering = (TextView) findViewById(R.id.steering_angle);
+
 
         Mat frame = inputFrame.rgba();
-        //float steering = get_steering_prediction(frame);
-        Mat after_Lines  = draw_LaneLines(frame.clone());
-        return after_Lines;
+        steering_angle_ = get_steering_prediction(frame.clone());
+        Mat displayMat = null;
+//        if(counterFrme % 10  == 0 || counterFrme %10 ==1 || counterFrme %10 ==2 || counterFrme %10 ==3 || counterFrme %10 ==4   ) {
+            displayMat  = draw_LaneLines(frame.clone());
+//            displayMat = CarDetect(displayMat);
+//            displayMat = PedestrainDet(frame.clone());
+
+//        }else{
+//            displayMat = frame;
+//        }
+
+        counterFrme ++;
+        if(steering_angle_< 0 ) {
+            Imgproc.putText(
+                    displayMat,                          // Matrix obj of the image
+                    "turn left " + steering_angle_ * -1 + "% of the wheel",          // Text to be added
+                    new Point(10, 50),               // point
+                    Core.FONT_HERSHEY_SIMPLEX,      // front face
+                    1,                               // front scale
+                    new Scalar(255, 0, 0),             // Scalar object for color
+                    6                                // Thickness
+            );
+        }
+        if(steering_angle_ > 0 ) {
+            Imgproc.putText(
+                    displayMat,                          // Matrix obj of the image
+                    "turn right " + steering_angle_  + "% of the wheel",          // Text to be added
+                    new Point(10, 50),               // point
+                    Core.FONT_HERSHEY_SIMPLEX,      // front face
+                    1,                               // front scale
+                    new Scalar(255, 0, 0),             // Scalar object for color
+                    6                                // Thickness
+            );
+        }
+
+        return displayMat;
+
+    }
+
+    private Mat PedestrainDet(Mat frame_clone) {
+        MatOfRect mRect = new MatOfRect();
+
+        detector.detectMultiScale(frame_clone, mRect);
+
+        for ( Rect rect : mRect.toArray()){
+            Imgproc.rectangle(frame_clone, new Point(rect.x, rect.y),
+                    new Point(rect.x + rect.width,rect.y+rect.height),
+                    new Scalar(255,0,0));
+        }
+
+        return frame_clone;
+
+    }
+
+    private Mat CarDetect(Mat frame_clone){
+        MatOfRect mRect = new MatOfRect();
+
+        detector.detectMultiScale(frame_clone, mRect);
+
+        for ( Rect rect : mRect.toArray()){
+            Imgproc.rectangle(frame_clone, new Point(rect.x, rect.y),
+                    new Point(rect.x + rect.width,rect.y+rect.height),
+                    new Scalar(255,0,0));
+        }
+
+        return frame_clone;
 
     }
 
@@ -121,8 +266,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         System.out.println("hei "+ height + "wid " + width);
         Mat mask = new Mat(height,width, CvType.CV_8UC1,Scalar.all(0));
         Point[] rook_points = new Point[3];
-        rook_points[0]  = new Point(50,height);
-        rook_points[1]  = new Point(width/2, 150);
+        rook_points[0]  = new Point(200,height);
+        rook_points[1]  = new Point(width/2 +50, height/2);
         rook_points[2]  = new Point(width-50,height);
         MatOfPoint matPt = new MatOfPoint();
         matPt.fromArray(rook_points);
@@ -194,6 +339,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         Imgproc.line(frame_clone, new Point(points_Left_line[0], points_Left_line[1]), new Point(points_Left_line[2], points_Left_line[3]), new Scalar(255, 0, 0), 10);
         Imgproc.line(frame_clone, new Point(points_Right_line[0], points_Right_line[1]), new Point(points_Right_line[2], points_Right_line[3]), new Scalar(255, 0, 0), 10);
         return frame_clone;
+//    return mask;
     }
 
     private int[] make_points(double slope, double intercept, int height) {
