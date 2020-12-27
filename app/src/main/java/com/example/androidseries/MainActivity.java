@@ -76,13 +76,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-//        steering = (TextView) findViewById(R.id.steering_angle);
-
-//        if(steering_angle_< 0 )
-//            steering.setText("turn left" + steering_angle_ * -1 + "% of the wheel");
-//
-//        if(steering_angle_ > 0 )
-//            steering.setText("turn right" + steering_angle_  + "% of the wheel");
         cameraBridgeViewBase = (JavaCameraView) findViewById(R.id.CameraView);
         cameraBridgeViewBase.setVisibility(SurfaceView.VISIBLE);
         cameraBridgeViewBase.setCvCameraViewListener(this);
@@ -118,7 +111,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
             InputStream is = getResources().openRawResource(R.raw.pedestrian);
             File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
-            cascadeFilePedestrain = new File(cascadeDir, "pedestrian.xml");
+            cascadeFilePedestrain = new File(cascadeDir, "predestrains.xml");
 
             FileOutputStream os = new FileOutputStream(cascadeFilePedestrain);
             byte[] buffer = new byte[4096];
@@ -185,11 +178,11 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
 
         Mat frame = inputFrame.rgba();
-        steering_angle_ = get_steering_prediction(frame.clone());
+//        steering_angle_ = get_steering_prediction(frame.clone());
         Mat displayMat = null;
 //        if(counterFrme % 10  == 0 || counterFrme %10 ==1 || counterFrme %10 ==2 || counterFrme %10 ==3 || counterFrme %10 ==4   ) {
             displayMat  = draw_LaneLines(frame.clone());
-//            displayMat = CarDetect(displayMat);
+            displayMat = CarDetect(displayMat);
 //            displayMat = PedestrainDet(frame.clone());
 
 //        }else{
@@ -197,37 +190,43 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 //        }
 
         counterFrme ++;
-        if(steering_angle_< 0 ) {
-            Imgproc.putText(
-                    displayMat,                          // Matrix obj of the image
-                    "turn left " + steering_angle_ * -1 + "% of the wheel",          // Text to be added
-                    new Point(10, 50),               // point
-                    Core.FONT_HERSHEY_SIMPLEX,      // front face
-                    1,                               // front scale
-                    new Scalar(255, 0, 0),             // Scalar object for color
-                    6                                // Thickness
-            );
-        }
-        if(steering_angle_ > 0 ) {
-            Imgproc.putText(
-                    displayMat,                          // Matrix obj of the image
-                    "turn right " + steering_angle_  + "% of the wheel",          // Text to be added
-                    new Point(10, 50),               // point
-                    Core.FONT_HERSHEY_SIMPLEX,      // front face
-                    1,                               // front scale
-                    new Scalar(255, 0, 0),             // Scalar object for color
-                    6                                // Thickness
-            );
-        }
+//        if(steering_angle_< 0 ) {
+//            Imgproc.putText(
+//                    displayMat,                          // Matrix obj of the image
+//                    "turn left " + steering_angle_ * -1 + "% of the wheel",          // Text to be added
+//                    new Point(10, 50),               // point
+//                    Core.FONT_HERSHEY_SIMPLEX,      // front face
+//                    1,                               // front scale
+//                    new Scalar(255, 0, 0),             // Scalar object for color
+//                    6                                // Thickness
+//            );
+//        }
+//        if(steering_angle_ > 0 ) {
+//            Imgproc.putText(
+//                    displayMat,                          // Matrix obj of the image
+//                    "turn right " + steering_angle_  + "% of the wheel",          // Text to be added
+//                    new Point(10, 50),               // point
+//                    Core.FONT_HERSHEY_SIMPLEX,      // front face
+//                    1,                               // front scale
+//                    new Scalar(255, 0, 0),             // Scalar object for color
+//                    6                                // Thickness
+//            );
+//        }
 
         return displayMat;
 
     }
 
     private Mat PedestrainDet(Mat frame_clone) {
+
+
+
         MatOfRect mRect = new MatOfRect();
 
-        detector.detectMultiScale(frame_clone, mRect);
+
+        Mat gray = new Mat();
+        Imgproc.cvtColor(frame_clone, gray, Imgproc.COLOR_RGBA2GRAY);
+        detectorPed.detectMultiScale(gray, mRect,1.1,1);
 
         for ( Rect rect : mRect.toArray()){
             Imgproc.rectangle(frame_clone, new Point(rect.x, rect.y),
@@ -240,9 +239,11 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     }
 
     private Mat CarDetect(Mat frame_clone){
+        Mat gray = new Mat();
+        Imgproc.cvtColor(frame_clone, gray, Imgproc.COLOR_RGBA2GRAY);
         MatOfRect mRect = new MatOfRect();
 
-        detector.detectMultiScale(frame_clone, mRect);
+        detector.detectMultiScale(gray, mRect,1.1, 2);
 
         for ( Rect rect : mRect.toArray()){
             Imgproc.rectangle(frame_clone, new Point(rect.x, rect.y),
@@ -281,10 +282,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         Mat after_bit = new Mat();
         Core.bitwise_and(gray,mask,after_bit);
-//        lines = cv2.HoughLinesP(cropped_canny, 2, np.pi/180, 100, np.array([]), minLineLength=40,maxLineGap=5)
         Mat result = after_bit.clone();
         Mat lines = new Mat();
-        Imgproc.HoughLinesP(after_bit, lines, 2, Math.PI/180, 100, 50, 4);
+        Imgproc.HoughLinesP(after_bit, lines, 2, Math.PI/180, 100, 30, 5);
 
         Mat frame_clone = frame.clone();
 
@@ -377,24 +377,13 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         float[][][][] inputs = new float[1][200][66][3];
         float fs[] = new float[3];
         for( int r=0 ; r<f.rows() ; r++ ) {
-            //sb.append(""+r+") ");
             for( int c=0 ; c<f.cols() ; c++ ) {
                 f.get(r, c, fs);
-                //sb.append( "{");
                 inputs[0][c][r][0]=fs[0]/255;
                 inputs[0][c][r][1]=fs[1]/255;
                 inputs[0][c][r][2]=fs[2]/255;
-                //sb.append( String.valueOf(fs[0]));
-                //sb.append( ' ' );
-                //sb.append( String.valueOf(fs[1]));
-                //sb.append( ' ' );
-                //sb.append( String.valueOf(fs[2]));
-                //sb.append( "}");
-                //sb.append( ' ' );
             }
-            //sb.append( '\n' );
         }
-        //System.out.println(sb);
 
 
 
